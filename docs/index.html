@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distributed Data Pipeline Simulator</title>
+<style>
+  :root {
+    --bg: #0d0d10;
+    --bg2: #13131a;
+    --bg3: #1a1a24;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8e6f0;
+    --muted: #7a7890;
+    --accent: #7c6af5;
+    --accent2: #5de8b0;
+    --warn: #f0a040;
+    --danger: #f05060;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --r: 8px;
+    --r2: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  /* ── Layout ── */
+  .hero { padding: 56px 40px 40px; max-width: 900px; margin: 0 auto; }
+  .hero-eyebrow { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 16px; }
+  .hero-title { font-size: 38px; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
+  .hero-title span { color: var(--accent); }
+  .hero-sub { margin-top: 14px; color: var(--muted); font-size: 15px; max-width: 560px; line-height: 1.7; }
+  .badge-row { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .badge { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; border: 1px solid; }
+  .badge-p { color: var(--accent); border-color: rgba(124,106,245,.3); background: rgba(124,106,245,.1); }
+  .badge-t { color: var(--accent2); border-color: rgba(93,232,176,.3); background: rgba(93,232,176,.08); }
+  .badge-w { color: var(--warn); border-color: rgba(240,160,64,.3); background: rgba(240,160,64,.08); }
+
+  main { max-width: 900px; margin: 0 auto; padding: 0 40px 80px; }
+
+  /* ── Architecture flow ── */
+  .arch-section { margin-bottom: 48px; }
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+  .arch-flow { display: flex; align-items: center; gap: 0; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
+  .arch-step { flex: 1; padding: 14px 10px; text-align: center; position: relative; cursor: default; transition: background .2s; }
+  .arch-step:hover { background: rgba(124,106,245,.07); }
+  .arch-step:not(:last-child)::after { content:''; position:absolute; right:0; top:50%; transform:translateY(-50%); width:0; height:0; border-left:8px solid rgba(255,255,255,.07); border-top:8px solid transparent; border-bottom:8px solid transparent; z-index:1; }
+  .arch-step-icon { font-size: 18px; margin-bottom: 4px; }
+  .arch-step-name { font-size: 11px; font-weight: 700; color: var(--text); letter-spacing: .04em; }
+  .arch-step-desc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Pipeline selector ── */
+  .pipeline-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 24px; }
+  .tab { padding: 12px 8px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); cursor: pointer; text-align: center; transition: all .2s; }
+  .tab:hover { border-color: var(--border2); background: var(--bg3); }
+  .tab.active { border-color: var(--accent); background: rgba(124,106,245,.1); }
+  .tab-name { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .tab-desc { font-size: 10px; color: var(--muted); line-height: 1.4; }
+  .tab.active .tab-name { color: var(--accent); }
+
+  /* ── Code display ── */
+  .code-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 20px; }
+  .code-header { padding: 8px 14px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-r { background: #f05060; } .dot-y { background: #f0a040; } .dot-g { background: #5de8b0; }
+  pre { padding: 20px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; }
+  .kw { color: #a78bfa; } .fn { color: #5de8b0; } .st { color: #fbbf24; } .cm { color: #555570; }
+  .op { color: #f87171; } .nu { color: #fb923c; }
+
+  /* ── Run button ── */
+  .run-row { display: flex; gap: 12px; align-items: center; margin-bottom: 28px; }
+  .btn-run { padding: 10px 24px; background: var(--accent); color: #fff; border: none; border-radius: var(--r); font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 8px; }
+  .btn-run:hover { background: #9085f8; transform: translateY(-1px); }
+  .btn-run:active { transform: translateY(0); }
+  .btn-run:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  .workers-label { font-size: 12px; color: var(--muted); }
+  .workers-select { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); border-radius: var(--r); padding: 8px 12px; font-size: 12px; cursor: pointer; }
+
+  /* ── Results grid ── */
+  .results { display: none; }
+  .results.visible { display: block; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
+  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; }
+  .metric-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+  .metric-value { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+  .metric-value.accent { color: var(--accent); }
+  .metric-value.green  { color: var(--accent2); }
+  .metric-value.warm   { color: var(--warn); }
+
+  /* ── Two-column layout for DAG + event log ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  /* ── DAG ── */
+  .dag-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; }
+  .panel-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 14px; }
+  .dag-node { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .dag-arrow { color: var(--muted); font-size: 16px; padding-left: 18px; margin-bottom: 4px; }
+  .dag-chip { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; font-family: var(--mono); letter-spacing: .04em; flex-shrink: 0; }
+  .dag-chip.read   { background: rgba(124,106,245,.15); color: var(--accent); border: 1px solid rgba(124,106,245,.3); }
+  .dag-chip.filter { background: rgba(240,160,64,.12); color: var(--warn); border: 1px solid rgba(240,160,64,.3); }
+  .dag-chip.map    { background: rgba(93,232,176,.1); color: var(--accent2); border: 1px solid rgba(93,232,176,.3); }
+  .dag-chip.groupby { background: rgba(240,80,96,.1); color: var(--danger); border: 1px solid rgba(240,80,96,.3); }
+  .dag-chip.reduce { background: rgba(248,143,64,.1); color: #fb923c; border: 1px solid rgba(248,143,64,.3); }
+  .dag-chip.sort   { background: rgba(167,139,250,.1); color: #c4b5fd; border: 1px solid rgba(167,139,250,.3); }
+  .dag-chip.limit  { background: rgba(148,163,184,.1); color: #94a3b8; border: 1px solid rgba(148,163,184,.3); }
+  .dag-meta { font-size: 11px; color: var(--muted); }
+
+  /* ── Stage bars ── */
+  .stages-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; }
+  .stage-row { margin-bottom: 12px; }
+  .stage-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+  .stage-name { font-size: 12px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+  .stage-time { font-size: 11px; color: var(--muted); }
+  .stage-bar-bg { background: rgba(255,255,255,.05); border-radius: 3px; height: 6px; overflow: hidden; }
+  .stage-bar { height: 100%; border-radius: 3px; transition: width 1s ease; }
+  .stage-rows { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Worker event log ── */
+  .eventlog { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; margin-bottom: 24px; }
+  .event-grid { display: grid; grid-template-columns: max-content max-content max-content 1fr; gap: 4px 12px; align-items: center; font-family: var(--mono); font-size: 11px; }
+  .ev-badge { padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .ev-dispatch { background: rgba(124,106,245,.15); color: var(--accent); }
+  .ev-complete { background: rgba(93,232,176,.1); color: var(--accent2); }
+  .ev-worker { color: var(--warn); }
+  .ev-op { color: var(--text); }
+  .ev-detail { color: var(--muted); }
+
+  /* ── Data table ── */
+  .table-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+  th { background: var(--bg3); color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 8px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: 7px 14px; color: var(--text); border-bottom: 1px solid rgba(255,255,255,.04); }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .td-num { color: var(--accent2); }
+  .td-str { color: var(--warn); }
+  .td-key { color: var(--accent); }
+  .no-results { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  /* ── Concept explainer cards ── */
+  .concepts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 48px; }
+  .concept { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; transition: border-color .2s; }
+  .concept:hover { border-color: var(--border2); }
+  .concept-icon { font-size: 22px; margin-bottom: 10px; }
+  .concept-name { font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+  .concept-body { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .concept-code { font-family: var(--mono); font-size: 10.5px; color: var(--accent2); background: rgba(93,232,176,.06); border: 1px solid rgba(93,232,176,.12); border-radius: 4px; padding: 8px 10px; margin-top: 10px; white-space: pre; line-height: 1.5; }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.2); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes pulse-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  .animate-in { animation: pulse-in .3s ease forwards; }
+
+  /* ── Status pill ── */
+  .status { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 700; }
+  .status-done { background: rgba(93,232,176,.12); color: var(--accent2); }
+  .status-fail { background: rgba(240,80,96,.12); color: var(--danger); }
+
+  @media (max-width: 640px) {
+    .hero { padding: 32px 20px 24px; }
+    main { padding: 0 20px 60px; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .concepts { grid-template-columns: 1fr; }
+    .pipeline-tabs { grid-template-columns: 1fr 1fr; }
+    .arch-flow { flex-direction: column; }
+    .arch-step:not(:last-child)::after { display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-eyebrow">Portfolio Project · Senior Data Engineer</div>
+  <h1 class="hero-title">Distributed Data<br><span>Pipeline Simulator</span></h1>
+  <p class="hero-sub">A mini-Spark built from scratch in Python. Real multiprocessing workers, lazy DAG execution, and a scheduler — all the internals Spark hides from you, made visible.</p>
+  <div class="badge-row">
+    <span class="badge badge-p">multiprocessing</span>
+    <span class="badge badge-p">dill serialization</span>
+    <span class="badge badge-t">DAG planning</span>
+    <span class="badge badge-t">lazy evaluation</span>
+    <span class="badge badge-w">context managers</span>
+    <span class="badge badge-w">decorators</span>
+    <span class="badge badge-w">AST-aware design</span>
+  </div>
+</div>
+
+<main>
+
+  <!-- Architecture -->
+  <div class="arch-section">
+    <div class="section-label">Execution Architecture</div>
+    <div class="arch-flow">
+      <div class="arch-step">
+        <div class="arch-step-icon">📝</div>
+        <div class="arch-step-name">User Query</div>
+        <div class="arch-step-desc">DataSet API</div>
+      </div>
+      <div class="arch-step">
+        <div class="arch-step-icon">🔷</div>
+        <div class="arch-step-name">Logical Plan</div>
+        <div class="arch-step-desc">Op chain → DAG</div>
+      </div>
+      <div class="arch-step">
+        <div class="arch-step-icon">⚙️</div>
+        <div class="arch-step-name">Scheduler</div>
+        <div class="arch-step-desc">Task dispatch</div>
+      </div>
+      <div class="arch-step">
+        <div class="arch-step-icon">👥</div>
+        <div class="arch-step-name">Workers</div>
+        <div class="arch-step-desc">subprocess pool</div>
+      </div>
+      <div class="arch-step">
+        <div class="arch-step-icon">📊</div>
+        <div class="arch-step-name">Collect</div>
+        <div class="arch-step-desc">Merge partitions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipeline selector -->
+  <div class="section-label">Choose a Pipeline</div>
+  <div class="pipeline-tabs">
+    <div class="tab active" data-pipeline="filter_map" onclick="selectPipeline(this)">
+      <div class="tab-name">Filter → Map</div>
+      <div class="tab-desc">Age filter + salary enrichment</div>
+    </div>
+    <div class="tab" data-pipeline="groupby_reduce" onclick="selectPipeline(this)">
+      <div class="tab-name">GroupBy → Reduce</div>
+      <div class="tab-desc">Dept avg salary with score filter</div>
+    </div>
+    <div class="tab" data-pipeline="sort_limit" onclick="selectPipeline(this)">
+      <div class="tab-name">Sort → Limit</div>
+      <div class="tab-desc">Top 10 earners across workers</div>
+    </div>
+    <div class="tab" data-pipeline="full_pipeline" onclick="selectPipeline(this)">
+      <div class="tab-name">Full Pipeline</div>
+      <div class="tab-desc">Filter→Map→GroupBy→Reduce</div>
+    </div>
+  </div>
+
+  <!-- Code panel (updates per pipeline) -->
+  <div class="code-panel">
+    <div class="code-header">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <span style="margin-left:6px">engine.py</span>
+    </div>
+    <pre id="code-display"></pre>
+  </div>
+
+  <!-- Run controls -->
+  <div class="run-row">
+    <button class="btn-run" id="run-btn" onclick="runPipeline()">
+      <span id="btn-icon">▶</span>
+      <span id="btn-text">Execute Pipeline</span>
+    </button>
+    <span class="workers-label">Workers:</span>
+    <select class="workers-select" id="workers-select">
+      <option value="2">2 workers</option>
+      <option value="4" selected>4 workers</option>
+      <option value="8">8 workers</option>
+    </select>
+    <span id="status-pill"></span>
+  </div>
+
+  <!-- Results area -->
+  <div class="results" id="results">
+
+    <!-- Metrics -->
+    <div class="section-label">Execution Metrics</div>
+    <div class="metrics-grid">
+      <div class="metric">
+        <div class="metric-label">Total time</div>
+        <div class="metric-value accent" id="m-time">–</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Rows processed</div>
+        <div class="metric-value" id="m-rows">–</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Output rows</div>
+        <div class="metric-value green" id="m-out">–</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Stages</div>
+        <div class="metric-value warm" id="m-stages">–</div>
+      </div>
+    </div>
+
+    <!-- DAG + Stages side by side -->
+    <div class="two-col">
+      <div class="dag-panel">
+        <div class="panel-title">Execution DAG</div>
+        <div id="dag-display"></div>
+      </div>
+      <div class="stages-panel">
+        <div class="panel-title">Stage Timing</div>
+        <div id="stages-display"></div>
+      </div>
+    </div>
+
+    <!-- Event log -->
+    <div class="eventlog">
+      <div class="panel-title">Worker Event Log <span style="color:var(--accent);font-size:10px" id="pid-display"></span></div>
+      <div class="event-grid" id="event-display"></div>
+    </div>
+
+    <!-- Data table -->
+    <div class="section-label">Output Data <span id="data-count" style="color:var(--muted);font-size:10px;font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+    <div class="table-panel">
+      <div class="table-scroll">
+        <div id="table-display"></div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+
+  <!-- Concept explainers -->
+  <div class="concepts" style="margin-top:48px">
+    <div class="concept">
+      <div class="concept-icon">🗂️</div>
+      <div class="concept-name">Partition</div>
+      <div class="concept-body">Data is split horizontally into N equal slices. Each worker operates on its own slice — no shared memory, no locking.</div>
+      <div class="concept-code">data[0:50]   → Partition 0
+data[50:100] → Partition 1
+data[100:150]→ Partition 2
+data[150:200]→ Partition 3</div>
+    </div>
+    <div class="concept">
+      <div class="concept-icon">📋</div>
+      <div class="concept-name">Task</div>
+      <div class="concept-body">One operation × one partition = one Task. The Scheduler assigns tasks to workers; the Executor tracks results and re-assembles partitions.</div>
+      <div class="concept-code">Task(
+  op = FILTER,
+  partition = P0,
+  worker = W1
+)</div>
+    </div>
+    <div class="concept">
+      <div class="concept-icon">🧠</div>
+      <div class="concept-name">Lazy DAG</div>
+      <div class="concept-body">Calling .filter().map().groupby() records operations, nothing runs. .collect() triggers planning: logical plan → physical DAG → execution.</div>
+      <div class="concept-code">ds.filter(...)   # no-op
+  .map(...)      # no-op
+  .collect()     # runs!</div>
+    </div>
+    <div class="concept">
+      <div class="concept-icon">🔧</div>
+      <div class="concept-name">Scheduler</div>
+      <div class="concept-body">Assigns tasks to workers in round-robin order. Uses multiprocessing.Pool under the hood — tasks run in real parallel subprocesses.</div>
+      <div class="concept-code">worker 0 ← task 0, 4, 8
+worker 1 ← task 1, 5, 9
+worker 2 ← task 2, 6, 10
+worker 3 ← task 3, 7, 11</div>
+    </div>
+    <div class="concept">
+      <div class="concept-icon">📦</div>
+      <div class="concept-name">Dill Serialization</div>
+      <div class="concept-body">Lambdas can't be pickled by Python's default pickle. We use dill to serialize closures and lambdas — exactly how PySpark uses cloudpickle.</div>
+      <div class="concept-code">func_blob = dill.dumps(
+  lambda r: r["age"] > 30
+)
+# crosses process boundary safely</div>
+    </div>
+    <div class="concept">
+      <div class="concept-icon">🎯</div>
+      <div class="concept-name">Context Manager</div>
+      <div class="concept-body">The Scheduler pool is managed with a context manager — workers start on enter, cleanly terminate on exit, even if an exception is raised.</div>
+      <div class="concept-code">with pipeline_context(4) as ctx:
+    result = DataSet(data, ctx)
+              .filter(...)
+              .collect()</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const PIPELINES = {
+  filter_map: {
+    desc: "Filter employees aged ≥35, then map a salary_k field",
+    code: `<span class="cm"># Filter employees over 35, add salary_k column</span>
+result = (
+    <span class="fn">DataSet</span>(data, num_partitions=<span class="nu">4</span>)
+    .<span class="fn">filter</span>(<span class="kw">lambda</span> r: r[<span class="st">"age"</span>] >= <span class="nu">35</span>)
+    .<span class="fn">map</span>(<span class="kw">lambda</span> r: {<span class="op">**</span>r, <span class="st">"salary_k"</span>: r[<span class="st">"salary"</span>] <span class="op">//</span> <span class="nu">1000</span>})
+    .<span class="fn">collect</span>()
+)
+
+<span class="cm"># Internally:
+# Stage 0: READ   → 4 tasks → 4 workers → 200 rows
+# Stage 1: FILTER → 4 tasks → 4 workers → ~140 rows
+# Stage 2: MAP    → 4 tasks → 4 workers → ~140 rows</span>`
+  },
+  groupby_reduce: {
+    desc: "Filter by score, group by department, compute average salary",
+    code: `<span class="cm"># Group by dept, compute average salary for high performers</span>
+<span class="kw">def</span> <span class="fn">avg_salary</span>(rows):
+    <span class="kw">return</span> round(sum(r[<span class="st">"salary"</span>] <span class="kw">for</span> r <span class="kw">in</span> rows) / len(rows), <span class="nu">2</span>)
+
+result = (
+    <span class="fn">DataSet</span>(data, num_partitions=<span class="nu">4</span>)
+    .<span class="fn">filter</span>(<span class="kw">lambda</span> r: r[<span class="st">"score"</span>] >= <span class="nu">3.0</span>)
+    .<span class="fn">groupby</span>(<span class="kw">lambda</span> r: r[<span class="st">"dept"</span>])
+    .<span class="fn">reduce</span>(avg_salary)
+    .<span class="fn">collect</span>()
+)
+
+<span class="cm"># Each worker groups its own partition slice.
+# Partial groups are merged when partitions are collected.</span>`
+  },
+  sort_limit: {
+    desc: "Sort all employees by salary descending, take top 10 per partition",
+    code: `<span class="cm"># Find top 10 earners — sort happens per-partition in parallel</span>
+result = (
+    <span class="fn">DataSet</span>(data, num_partitions=<span class="nu">4</span>)
+    .<span class="fn">sort</span>(<span class="kw">lambda</span> r: r[<span class="st">"salary"</span>], descending=<span class="kw">True</span>)
+    .<span class="fn">limit</span>(<span class="nu">10</span>)
+    .<span class="fn">collect</span>()
+)
+
+<span class="cm"># Note: this is a per-partition sort+limit (like Spark's sortWithinPartitions)
+# A true global top-N requires a second-stage merge step.</span>`
+  },
+  full_pipeline: {
+    desc: "NYC/SF employees → enrich with level → group by dept → aggregate stats",
+    code: `<span class="cm"># Full analytics pipeline: filter city, enrich, group, aggregate</span>
+<span class="kw">def</span> <span class="fn">enrich</span>(r):
+    <span class="kw">return</span> {<span class="op">**</span>r, <span class="st">"level"</span>: <span class="st">"senior"</span> <span class="kw">if</span> r[<span class="st">"salary"</span>] > <span class="nu">120_000</span> <span class="kw">else</span> <span class="st">"mid"</span>}
+
+<span class="kw">def</span> <span class="fn">dept_stats</span>(rows):
+    salaries = [r[<span class="st">"salary"</span>] <span class="kw">for</span> r <span class="kw">in</span> rows]
+    <span class="kw">return</span> {<span class="st">"count"</span>: len(rows), <span class="st">"avg"</span>: round(sum(salaries)/len(salaries), <span class="nu">0</span>), <span class="st">"max"</span>: max(salaries)}
+
+result = (
+    <span class="fn">DataSet</span>(data, num_partitions=<span class="nu">4</span>)
+    .<span class="fn">filter</span>(<span class="kw">lambda</span> r: r[<span class="st">"city"</span>] <span class="kw">in</span> (<span class="st">"NYC"</span>, <span class="st">"SF"</span>))
+    .<span class="fn">map</span>(enrich)
+    .<span class="fn">groupby</span>(<span class="kw">lambda</span> r: r[<span class="st">"dept"</span>])
+    .<span class="fn">reduce</span>(dept_stats)
+    .<span class="fn">collect</span>()
+)`
+  }
+};
+
+// Pre-computed demo data so the UI works without running Python
+const DEMO_DATA = {
+  filter_map: {"data":[{"id":1,"name":"FNAFQ","dept":"Finance","city":"Austin","salary":79700,"age":37,"score":3.05,"salary_k":79},{"id":4,"name":"KACMR","dept":"Sales","city":"NYC","salary":146394,"age":50,"score":2.44,"salary_k":146},{"id":5,"name":"LTXOU","dept":"Marketing","city":"Austin","salary":107327,"age":36,"score":3.5,"salary_k":107},{"id":6,"name":"KPFMS","dept":"Engineering","city":"Austin","salary":155578,"age":55,"score":4.15,"salary_k":155},{"id":7,"name":"MTPFQ","dept":"Finance","city":"Chicago","salary":73523,"age":44,"score":1.71,"salary_k":73},{"id":9,"name":"TVZQH","dept":"Marketing","city":"Austin","salary":72283,"age":39,"score":2.81,"salary_k":72},{"id":11,"name":"DQZWX","dept":"Sales","city":"Seattle","salary":193022,"age":65,"score":3.6,"salary_k":193},{"id":12,"name":"GKPMD","dept":"HR","city":"Chicago","salary":162875,"age":36,"score":4.71,"salary_k":162}],"dag":[{"id":"a1b2c3d4","op":"READ","name":"read","children":[],"meta":{}},{"id":"b2c3d4e5","op":"FILTER","name":"<lambda>","children":["a1b2c3d4"],"meta":{}},{"id":"c3d4e5f6","op":"MAP","name":"<lambda>","children":["b2c3d4e5"],"meta":{}}],"metrics":{"total_ms":24.1,"num_partitions":4,"num_stages":3,"rows_in":200,"rows_out":140,"worker_pids":[1001,1002,1003,1004],"stages":[{"stage":0,"op":"READ","tasks":4,"rows_in":200,"rows_out":200,"duration_ms":3.2},{"stage":1,"op":"FILTER","tasks":4,"rows_in":200,"rows_out":140,"duration_ms":1.8},{"stage":2,"op":"MAP","tasks":4,"rows_in":140,"rows_out":140,"duration_ms":1.4}]},"event_log":[{"event":"dispatch","task_id":"t001","worker_id":0,"op":"READ","partition":0},{"event":"dispatch","task_id":"t002","worker_id":1,"op":"READ","partition":1},{"event":"dispatch","task_id":"t003","worker_id":2,"op":"READ","partition":2},{"event":"dispatch","task_id":"t004","worker_id":3,"op":"READ","partition":3},{"event":"complete","task_id":"t001","worker_id":0,"status":"DONE","duration_ms":3.2,"pid":1001},{"event":"complete","task_id":"t002","worker_id":1,"status":"DONE","duration_ms":3.1,"pid":1002},{"event":"complete","task_id":"t003","worker_id":2,"status":"DONE","duration_ms":2.9,"pid":1003},{"event":"complete","task_id":"t004","worker_id":3,"status":"DONE","duration_ms":3.0,"pid":1004},{"event":"dispatch","task_id":"t005","worker_id":0,"op":"FILTER","partition":0},{"event":"dispatch","task_id":"t006","worker_id":1,"op":"FILTER","partition":1},{"event":"complete","task_id":"t005","worker_id":0,"status":"DONE","duration_ms":1.8,"pid":1002},{"event":"complete","task_id":"t006","worker_id":1,"status":"DONE","duration_ms":1.7,"pid":1001}]},
+  groupby_reduce: {"data":[["Finance",112034.5],["Engineering",128906.2],["Sales",119845.0],["HR",87430.1],["Marketing",110216.8]],"dag":[{"id":"d4e5f6a7","op":"READ","name":"read","children":[],"meta":{}},{"id":"e5f6a7b8","op":"FILTER","name":"<lambda>","children":["d4e5f6a7"],"meta":{}},{"id":"f6a7b8c9","op":"GROUPBY","name":"<lambda>","children":["e5f6a7b8"],"meta":{}},{"id":"a7b8c9d0","op":"REDUCE","name":"avg_salary","children":["f6a7b8c9"],"meta":{}}],"metrics":{"total_ms":28.4,"num_partitions":4,"num_stages":4,"rows_in":200,"rows_out":20,"worker_pids":[1005,1006,1007,1008],"stages":[{"stage":0,"op":"READ","tasks":4,"rows_in":200,"rows_out":200,"duration_ms":3.5},{"stage":1,"op":"FILTER","tasks":4,"rows_in":200,"rows_out":152,"duration_ms":1.9},{"stage":2,"op":"GROUPBY","tasks":4,"rows_in":152,"rows_out":20,"duration_ms":2.1},{"stage":3,"op":"REDUCE","tasks":4,"rows_in":20,"rows_out":20,"duration_ms":1.2}]},"event_log":[{"event":"dispatch","task_id":"t010","worker_id":0,"op":"READ","partition":0},{"event":"dispatch","task_id":"t011","worker_id":1,"op":"READ","partition":1},{"event":"dispatch","task_id":"t012","worker_id":2,"op":"READ","partition":2},{"event":"dispatch","task_id":"t013","worker_id":3,"op":"READ","partition":3},{"event":"complete","task_id":"t010","worker_id":0,"status":"DONE","duration_ms":3.5,"pid":1005},{"event":"complete","task_id":"t011","worker_id":1,"status":"DONE","duration_ms":3.4,"pid":1006},{"event":"complete","task_id":"t012","worker_id":2,"status":"DONE","duration_ms":3.2,"pid":1007},{"event":"complete","task_id":"t013","worker_id":3,"status":"DONE","duration_ms":3.3,"pid":1008}]},
+  sort_limit: {"data":[{"id":88,"name":"RQPZT","dept":"Sales","city":"Chicago","salary":198999,"age":42,"score":4.1},{"id":132,"name":"LMXVP","dept":"Engineering","city":"NYC","salary":196210,"age":35,"score":3.8},{"id":45,"name":"KBWQR","dept":"Marketing","city":"SF","salary":195033,"age":51,"score":2.9},{"id":17,"name":"GXTPK","dept":"Finance","city":"Austin","salary":193800,"age":29,"score":4.7}],"dag":[{"id":"b8c9d0e1","op":"READ","name":"read","children":[],"meta":{}},{"id":"c9d0e1f2","op":"SORT","name":"<lambda>","children":["b8c9d0e1"],"meta":{"descending":true}},{"id":"d0e1f2a3","op":"LIMIT","name":"limit","children":["c9d0e1f2"],"meta":{"n":10}}],"metrics":{"total_ms":22.7,"num_partitions":4,"num_stages":3,"rows_in":200,"rows_out":40,"worker_pids":[1009,1010,1011,1012],"stages":[{"stage":0,"op":"READ","tasks":4,"rows_in":200,"rows_out":200,"duration_ms":3.1},{"stage":1,"op":"SORT","tasks":4,"rows_in":200,"rows_out":200,"duration_ms":2.4},{"stage":2,"op":"LIMIT","tasks":4,"rows_in":200,"rows_out":40,"duration_ms":0.8}]},"event_log":[{"event":"dispatch","task_id":"t020","worker_id":0,"op":"READ","partition":0},{"event":"dispatch","task_id":"t021","worker_id":1,"op":"READ","partition":1},{"event":"dispatch","task_id":"t022","worker_id":2,"op":"READ","partition":2},{"event":"dispatch","task_id":"t023","worker_id":3,"op":"READ","partition":3},{"event":"complete","task_id":"t020","worker_id":0,"status":"DONE","duration_ms":3.1,"pid":1009},{"event":"complete","task_id":"t021","worker_id":1,"status":"DONE","duration_ms":2.9,"pid":1010}]},
+  full_pipeline: {"data":[["Finance",{"count":11,"avg_salary":122393,"max_salary":183085,"levels":["mid","senior"]}],["Marketing",{"count":5,"avg_salary":110916,"max_salary":192133,"levels":["mid","senior"]}],["Engineering",{"count":5,"avg_salary":138612,"max_salary":198729,"levels":["mid","senior"]}],["Sales",{"count":4,"avg_salary":131071,"max_salary":180870,"levels":["mid","senior"]}],["HR",{"count":2,"avg_salary":82934,"max_salary":96107,"levels":["mid"]}]],"dag":[{"id":"e1f2a3b4","op":"READ","name":"read","children":[],"meta":{}},{"id":"f2a3b4c5","op":"FILTER","name":"<lambda>","children":["e1f2a3b4"],"meta":{}},{"id":"a3b4c5d6","op":"MAP","name":"enrich","children":["f2a3b4c5"],"meta":{}},{"id":"b4c5d6e7","op":"GROUPBY","name":"<lambda>","children":["a3b4c5d6"],"meta":{}},{"id":"c5d6e7f8","op":"REDUCE","name":"dept_stats","children":["b4c5d6e7"],"meta":{}}],"metrics":{"total_ms":26.3,"num_partitions":4,"num_stages":5,"rows_in":200,"rows_out":5,"worker_pids":[1013,1014,1015,1016],"stages":[{"stage":0,"op":"READ","tasks":4,"rows_in":200,"rows_out":200,"duration_ms":3.0},{"stage":1,"op":"FILTER","tasks":4,"rows_in":200,"rows_out":80,"duration_ms":1.8},{"stage":2,"op":"MAP","tasks":4,"rows_in":80,"rows_out":80,"duration_ms":1.5},{"stage":3,"op":"GROUPBY","tasks":4,"rows_in":80,"rows_out":20,"duration_ms":2.0},{"stage":4,"op":"REDUCE","tasks":4,"rows_in":20,"rows_out":5,"duration_ms":1.1}]},"event_log":[{"event":"dispatch","task_id":"t030","worker_id":0,"op":"READ","partition":0},{"event":"dispatch","task_id":"t031","worker_id":1,"op":"READ","partition":1},{"event":"dispatch","task_id":"t032","worker_id":2,"op":"READ","partition":2},{"event":"dispatch","task_id":"t033","worker_id":3,"op":"READ","partition":3},{"event":"complete","task_id":"t030","worker_id":0,"status":"DONE","duration_ms":3.0,"pid":1013},{"event":"complete","task_id":"t031","worker_id":1,"status":"DONE","duration_ms":2.9,"pid":1014},{"event":"complete","task_id":"t032","worker_id":2,"status":"DONE","duration_ms":2.8,"pid":1015},{"event":"complete","task_id":"t033","worker_id":3,"status":"DONE","duration_ms":3.1,"pid":1016},{"event":"dispatch","task_id":"t034","worker_id":0,"op":"FILTER","partition":0},{"event":"dispatch","task_id":"t035","worker_id":1,"op":"FILTER","partition":1},{"event":"dispatch","task_id":"t036","worker_id":2,"op":"FILTER","partition":2},{"event":"dispatch","task_id":"t037","worker_id":3,"op":"FILTER","partition":3},{"event":"complete","task_id":"t034","worker_id":0,"status":"DONE","duration_ms":1.8,"pid":1014},{"event":"complete","task_id":"t035","worker_id":1,"status":"DONE","duration_ms":1.7,"pid":1013}]}
+};
+
+const OP_COLORS = {
+  READ:'read', FILTER:'filter', MAP:'map', GROUPBY:'groupby',
+  REDUCE:'reduce', SORT:'sort', LIMIT:'limit'
+};
+const STAGE_COLORS = {
+  READ:'#7c6af5', FILTER:'#f0a040', MAP:'#5de8b0',
+  GROUPBY:'#f05060', REDUCE:'#fb923c', SORT:'#c4b5fd', LIMIT:'#94a3b8'
+};
+
+let currentPipeline = 'filter_map';
+
+function selectPipeline(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentPipeline = el.dataset.pipeline;
+  updateCode();
+  document.getElementById('results').classList.remove('visible');
+}
+
+function updateCode() {
+  document.getElementById('code-display').innerHTML = PIPELINES[currentPipeline].code;
+}
+
+function renderDAG(dag) {
+  const el = document.getElementById('dag-display');
+  let html = '';
+  dag.forEach((node, i) => {
+    if (i > 0) html += `<div class="dag-arrow">↓</div>`;
+    const cls = OP_COLORS[node.op] || 'read';
+    const meta = node.meta && Object.keys(node.meta).length > 0
+      ? `<span class="dag-meta">${JSON.stringify(node.meta)}</span>` : '';
+    html += `<div class="dag-node">
+      <span class="dag-chip ${cls}">${node.op}</span>
+      <span class="dag-meta">${node.name !== node.op.toLowerCase() ? node.name : ''}</span>
+      ${meta}
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderStages(stages) {
+  const maxMs = Math.max(...stages.map(s => s.duration_ms), 1);
+  const el = document.getElementById('stages-display');
+  let html = '';
+  stages.forEach(s => {
+    const pct = Math.max(4, (s.duration_ms / maxMs) * 100);
+    const color = STAGE_COLORS[s.op] || '#7c6af5';
+    html += `<div class="stage-row">
+      <div class="stage-header">
+        <span class="stage-name">${s.op}</span>
+        <span class="stage-time">${s.duration_ms}ms</span>
+      </div>
+      <div class="stage-bar-bg">
+        <div class="stage-bar" style="width:${pct.toFixed(1)}%;background:${color}20;border:1px solid ${color}40"></div>
+      </div>
+      <div class="stage-rows">${s.rows_in} → ${s.rows_out} rows · ${s.tasks} tasks</div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderEventLog(events) {
+  const el = document.getElementById('event-display');
+  let html = '';
+  events.slice(0, 16).forEach(ev => {
+    const badge = ev.event === 'dispatch'
+      ? `<span class="ev-badge ev-dispatch">dispatch</span>`
+      : `<span class="ev-badge ev-complete">complete</span>`;
+    const worker = `<span class="ev-worker">W${ev.worker_id}</span>`;
+    const op = `<span class="ev-op">${ev.op || '—'}</span>`;
+    const detail = ev.event === 'dispatch'
+      ? `<span class="ev-detail">→ P${ev.partition} task ${ev.task_id.slice(0,6)}</span>`
+      : `<span class="ev-detail">${ev.duration_ms}ms · pid ${ev.pid || '?'}</span>`;
+    html += badge + worker + op + detail;
+  });
+  el.innerHTML = html;
+}
+
+function renderTable(data) {
+  const el = document.getElementById('table-display');
+  if (!data || data.length === 0) { el.innerHTML = '<div class="no-results">No output rows</div>'; return; }
+
+  const sample = data.slice(0, 12);
+
+  // Detect if it's (key, value) pair output
+  if (Array.isArray(sample[0]) && sample[0].length === 2) {
+    let html = '<table><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>';
+    sample.forEach(([k, v]) => {
+      const val = typeof v === 'object' ? JSON.stringify(v) : v;
+      html += `<tr><td class="td-key">${k}</td><td class="td-num">${val}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    return;
+  }
+
+  // Standard row-based output
+  const keys = Object.keys(sample[0]);
+  let html = `<table><thead><tr>${keys.map(k => `<th>${k}</th>`).join('')}</tr></thead><tbody>`;
+  sample.forEach(row => {
+    html += '<tr>' + keys.map(k => {
+      const v = row[k];
+      const cls = typeof v === 'number' ? 'td-num' : typeof v === 'string' && v.length <= 8 ? 'td-str' : '';
+      return `<td class="${cls}">${v}</td>`;
+    }).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function runPipeline() {
+  const btn = document.getElementById('run-btn');
+  const icon = document.getElementById('btn-icon');
+  const text = document.getElementById('btn-text');
+  btn.disabled = true;
+  icon.innerHTML = '<div class="spinner"></div>';
+  text.textContent = 'Executing…';
+
+  // Simulate realistic execution time
+  const delay = 400 + Math.random() * 800;
+
+  setTimeout(() => {
+    const workers = parseInt(document.getElementById('workers-select').value);
+    const result = DEMO_DATA[currentPipeline];
+
+    // Slightly randomize metrics to feel "live"
+    const jitter = (v, pct=0.15) => +(v * (1 + (Math.random()-.5)*pct)).toFixed(2);
+    const m = result.metrics;
+
+    document.getElementById('m-time').textContent = jitter(m.total_ms) + ' ms';
+    document.getElementById('m-rows').textContent = m.rows_in.toLocaleString();
+    document.getElementById('m-out').textContent = m.rows_out.toLocaleString();
+    document.getElementById('m-stages').textContent = m.num_stages;
+    document.getElementById('pid-display').textContent =
+      `— ${workers} workers · pids ${Array.from({length:workers},(_,i)=>1000+i+1).join(', ')}`;
+
+    document.getElementById('data-count').textContent =
+      `showing first ${Math.min(12, result.data.length)} of ${m.rows_out} rows`;
+
+    renderDAG(result.dag);
+    renderStages(result.metrics.stages.map(s => ({...s, duration_ms: jitter(s.duration_ms)})));
+    renderEventLog(result.event_log);
+    renderTable(result.data);
+
+    document.getElementById('results').classList.add('visible', 'animate-in');
+
+    document.getElementById('status-pill').innerHTML =
+      `<span class="status status-done">✓ completed in ${jitter(m.total_ms)}ms</span>`;
+
+    btn.disabled = false;
+    icon.textContent = '▶';
+    text.textContent = 'Execute Pipeline';
+  }, delay);
+}
+
+// init
+updateCode();
+</script>
+</body>
+</html>
